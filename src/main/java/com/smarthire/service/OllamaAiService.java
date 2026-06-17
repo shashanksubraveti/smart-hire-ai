@@ -35,6 +35,9 @@ public class OllamaAiService {
 
                 Compare the resume with the job description.
 
+                Be consistent and objective. Do not change the scoring style between runs.
+                Use the same evaluation logic every time for the same resume and job description.
+
                 Return the answer only in this format:
 
                 Match Score: __ percent
@@ -65,7 +68,10 @@ public class OllamaAiService {
                 "prompt", prompt,
                 "stream", false,
                 "options", Map.of(
-                        "num_predict", 500
+                        "num_predict", 500,
+                        "temperature", 0.1,
+                        "top_p", 0.9,
+                        "seed", 42
                 )
         );
 
