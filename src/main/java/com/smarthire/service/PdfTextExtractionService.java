@@ -12,6 +12,9 @@ import java.io.IOException;
 public class PdfTextExtractionService {
 
     public String extractTextFromPdf(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            return "";
+        }
 
         try (PDDocument document = Loader.loadPDF(file.getBytes())) {
             PDFTextStripper pdfTextStripper = new PDFTextStripper();
