@@ -27,7 +27,6 @@ public class OllamaAiService {
     }
 
     public String analyzeResume(String resumeText, String jobDescription) {
-
         String cleanedResumeText = limitText(resumeText, 6000);
         String cleanedJobDescription = limitText(jobDescription, 4000);
 
@@ -36,7 +35,7 @@ public class OllamaAiService {
 
                 Compare the resume with the job description.
 
-                Return a short answer only in this format:
+                Return the answer only in this format:
 
                 Match Score: __ percent
 
@@ -71,7 +70,7 @@ public class OllamaAiService {
         );
 
         try {
-            Map response = restTemplate.postForObject(
+            Map<?, ?> response = restTemplate.postForObject(
                     ollamaApiUrl,
                     requestBody,
                     Map.class
@@ -84,7 +83,10 @@ public class OllamaAiService {
             return response.get("response").toString();
 
         } catch (Exception exception) {
-            return "Ollama request failed or timed out. Please make sure Ollama is running and try again.";
+            return """
+                    Ollama request failed or timed out.
+                    Please make sure Ollama is running and try again.
+                    """;
         }
     }
 
