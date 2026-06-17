@@ -28,8 +28,8 @@ public class OllamaAiService {
 
     public String analyzeResume(String resumeText, String jobDescription) {
 
-        String cleanedResumeText = limitText(resumeText, 700);
-        String cleanedJobDescription = limitText(jobDescription, 700);
+        String cleanedResumeText = limitText(resumeText, 6000);
+        String cleanedJobDescription = limitText(jobDescription, 4000);
 
         String prompt = """
                 You are SmartHire AI.
@@ -66,7 +66,7 @@ public class OllamaAiService {
                 "prompt", prompt,
                 "stream", false,
                 "options", Map.of(
-                        "num_predict", 120
+                        "num_predict", 500
                 )
         );
 
