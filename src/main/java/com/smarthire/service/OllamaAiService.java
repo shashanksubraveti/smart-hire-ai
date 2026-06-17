@@ -1,9 +1,11 @@
 package com.smarthire.service;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.util.Map;
 
 @Service
@@ -15,57 +17,75 @@ public class OllamaAiService {
     @Value("${ollama.model}")
     private String ollamaModel;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+
+    public OllamaAiService() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(10));
+        factory.setReadTimeout(Duration.ofSeconds(60));
+        this.restTemplate = new RestTemplate(factory);
+    }
 
     public String analyzeResume(String resumeText, String jobDescription) {
 
-        String cleanedResumeText = limitText(resumeText, 6000);
+        String cleanedResumeText = limitText(resumeText, 700);
+        String cleanedJobDescription = limitText(jobDescription, 700);
 
         String prompt = """
-                You are SmartHire AI, an AI resume screening assistant.
+                You are SmartHire AI.
 
-                Analyze the resume against the job description.
+                Compare the resume with the job description.
 
-                Return the answer in this format:
+                Return a short answer only in this format:
 
-                Match Score: percentage from 0 to 100
+                Match Score: __ percent
 
                 Summary:
-                short summary of the candidate fit
+                One short paragraph.
 
                 Strengths:
-                - list strengths
+                - point 1
+                - point 2
 
                 Missing Skills:
-                - list missing skills
+                - point 1
+                - point 2
 
                 Recommendation:
-                final hiring recommendation
+                One short final recommendation.
 
                 Job Description:
                 %s
 
-                Resume Text:
+                Resume:
                 %s
-                """.formatted(jobDescription, cleanedResumeText);
+                """.formatted(cleanedJobDescription, cleanedResumeText);
 
         Map<String, Object> requestBody = Map.of(
                 "model", ollamaModel,
                 "prompt", prompt,
-                "stream", false
+                "stream", false,
+                "options", Map.of(
+                        "num_predict", 120
+                )
         );
 
-        Map response = restTemplate.postForObject(
-                ollamaApiUrl,
-                requestBody,
-                Map.class
-        );
+        try {
+            Map response = restTemplate.postForObject(
+                    ollamaApiUrl,
+                    requestBody,
+                    Map.class
+            );
 
-        if (response == null || response.get("response") == null) {
-            return "No response received from Ollama.";
+            if (response == null || response.get("response") == null) {
+                return "No response received from Ollama.";
+            }
+
+            return response.get("response").toString();
+
+        } catch (Exception exception) {
+            return "Ollama request failed or timed out. Please make sure Ollama is running and try again.";
         }
-
-        return response.get("response").toString();
     }
 
     private String limitText(String text, int maxLength) {
