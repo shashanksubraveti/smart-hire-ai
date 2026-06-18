@@ -1,5 +1,9 @@
 package com.smarthire.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smarthire.dto.ResumeAnalysisResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -11,6 +15,8 @@ import java.util.Map;
 @Service
 public class OllamaAiService {
 
+    private static final Logger logger = LoggerFactory.getLogger(OllamaAiService.class);
+
     @Value("${ollama.api.url}")
     private String ollamaApiUrl;
 
@@ -18,93 +24,115 @@ public class OllamaAiService {
     private String ollamaModel;
 
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     public OllamaAiService() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(10));
-        factory.setReadTimeout(Duration.ofSeconds(60));
+        factory.setReadTimeout(Duration.ofSeconds(180));
+
         this.restTemplate = new RestTemplate(factory);
+        this.objectMapper = new ObjectMapper();
     }
 
-    public String analyzeResume(String resumeText, String jobDescription) {
-        String cleanedResumeText = limitText(resumeText, 6000);
-        String cleanedJobDescription = limitText(jobDescription, 4000);
+    public ResumeAnalysisResponse analyzeResume(String resumeText, String jobDescription) {
 
         String prompt = """
-                You are SmartHire AI.
+                You are SmartHire AI, an intelligent resume screening assistant.
 
-                Compare the resume with the job description.
+                Analyze the resume text against the job description.
 
-                Be consistent and objective. Do not change the scoring style between runs.
-                Use the same evaluation logic every time for the same resume and job description.
+                Return ONLY valid JSON.
+                Do not include markdown.
+                Do not include explanations outside the JSON.
+                Do not wrap the JSON in ```json.
 
-                Return the answer only in this format:
+                The JSON must follow this exact structure:
 
-                Match Score: __ percent
+                {
+                  "matchScore": 85,
+                  "summary": "Short summary of the candidate fit.",
+                  "strengths": [
+                    "Strength 1",
+                    "Strength 2",
+                    "Strength 3"
+                  ],
+                  "missingSkills": [
+                    "Missing skill 1",
+                    "Missing skill 2"
+                  ],
+                  "recommendations": [
+                    "Recommendation 1",
+                    "Recommendation 2"
+                  ]
+                }
 
-                Summary:
-                One short paragraph.
+                Rules:
+                - matchScore must be a number between 0 and 100.
+                - strengths must contain exactly 3 items.
+                - missingSkills must contain exactly 3 items.
+                - recommendations must contain exactly 3 items.
+                - Keep each item short and professional.
+                - Return complete valid JSON only.
+                - The response must start with { and end with }.
 
-                Strengths:
-                - point 1
-                - point 2
-
-                Missing Skills:
-                - point 1
-                - point 2
-
-                Recommendation:
-                One short final recommendation.
+                Resume Text:
+                %s
 
                 Job Description:
                 %s
-
-                Resume:
-                %s
-                """.formatted(cleanedJobDescription, cleanedResumeText);
+                """.formatted(resumeText, jobDescription);
 
         Map<String, Object> requestBody = Map.of(
                 "model", ollamaModel,
                 "prompt", prompt,
                 "stream", false,
                 "options", Map.of(
-                        "num_predict", 500,
                         "temperature", 0.1,
                         "top_p", 0.9,
-                        "seed", 42
+                        "seed", 42,
+                        "num_predict", 1000
                 )
         );
 
         try {
-            Map<?, ?> response = restTemplate.postForObject(
+            logger.info("Sending resume analysis request to Ollama model: {}", ollamaModel);
+
+            Map<String, Object> response = restTemplate.postForObject(
                     ollamaApiUrl,
                     requestBody,
                     Map.class
             );
 
             if (response == null || response.get("response") == null) {
-                return "No response received from Ollama.";
+                logger.error("Ollama returned an empty response.");
+                throw new RuntimeException("Ollama returned an empty response.");
             }
 
-            return response.get("response").toString();
+            String aiResponse = response.get("response").toString();
+
+            logger.info("Raw Ollama response: {}", aiResponse);
+
+            String jsonResponse = extractJson(aiResponse);
+
+            logger.info("Extracted JSON response: {}", jsonResponse);
+
+            return objectMapper.readValue(jsonResponse, ResumeAnalysisResponse.class);
 
         } catch (Exception exception) {
-            return """
-                    Ollama request failed or timed out.
-                    Please make sure Ollama is running and try again.
-                    """;
+            logger.error("Error while calling or parsing Ollama API response", exception);
+            throw new RuntimeException("Failed to analyze resume using Ollama.", exception);
         }
     }
 
-    private String limitText(String text, int maxLength) {
-        if (text == null) {
-            return "";
+    private String extractJson(String aiResponse) {
+        int startIndex = aiResponse.indexOf("{");
+        int endIndex = aiResponse.lastIndexOf("}");
+
+        if (startIndex == -1 || endIndex == -1 || endIndex <= startIndex) {
+            throw new RuntimeException("No valid JSON object found in Ollama response.");
         }
 
-        if (text.length() <= maxLength) {
-            return text;
-        }
-
-        return text.substring(0, maxLength);
+        return aiResponse.substring(startIndex, endIndex + 1);
     }
 }

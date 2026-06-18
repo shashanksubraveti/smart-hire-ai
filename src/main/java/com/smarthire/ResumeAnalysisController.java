@@ -1,5 +1,6 @@
 package com.smarthire;
 
+import com.smarthire.dto.ResumeAnalysisResponse;
 import com.smarthire.service.OllamaAiService;
 import com.smarthire.service.PdfTextExtractionService;
 import org.slf4j.Logger;
@@ -29,7 +30,7 @@ public class ResumeAnalysisController {
     }
 
     @PostMapping("/analyze")
-    public ResponseEntity<String> analyzeResume(
+    public ResponseEntity<?> analyzeResume(
             @RequestParam("resume") MultipartFile resume,
             @RequestParam("jobDescription") String jobDescription
     ) {
@@ -56,7 +57,7 @@ public class ResumeAnalysisController {
 
             log.info("PDF text extracted. Character count: {}", resumeText.length());
 
-            String result = ollamaAiService.analyzeResume(resumeText, jobDescription);
+            ResumeAnalysisResponse result = ollamaAiService.analyzeResume(resumeText, jobDescription);
 
             log.info("AI analysis completed successfully.");
 
